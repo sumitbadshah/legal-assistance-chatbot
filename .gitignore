@@ -1,0 +1,32 @@
+# Environment variables (contains secret API keys)
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# Databases & logs
+*.db
+*.sqlite3
+*.log
+test_out.txt
+
+# Node / React Frontend
+node_modules/
+dist/
+build/
+.DS_Store
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
