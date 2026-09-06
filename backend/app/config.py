@@ -2,6 +2,10 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
+import os
+_env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+
 class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://legal_user:legal_pass@db:5432/legal_assistant"
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
 
     class Config:
-        env_file = ".env"
+        env_file = _env_file
 
     @property
     def cors_origins(self) -> list[str]:

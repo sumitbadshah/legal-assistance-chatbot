@@ -34,29 +34,11 @@ def complete(system_prompt: str, user_prompt: str, max_tokens: int | None = None
         return "I am Nyāya Sahāyak, your AI Legal Information Assistant. Please set a valid GEMINI_API_KEY in backend/.env to generate AI responses."
 
     tokens = max_tokens or settings.llm_max_tokens
-    model_candidates = [settings.llm_model, "gemini-flash-latest", "gemini-1.5-flash", "gemini-2.5-flash"]
-    # De-duplicate while preserving order
+    # Prioritize models known to work with the active key
+    model_candidates = ["models/gemini-flash-latest", "gemini-flash-latest", "models/gemini-2.5-flash", "gemini-2.5-flash", settings.llm_model]
     models_to_try = list(dict.fromkeys([m for m in model_candidates if m]))
 
-    # 1. Try official google-genai SDK first
-    if HAS_GENAI_SDK:
-        client = genai.Client(api_key=api_key)
-        for m_name in models_to_try:
-            try:
-                response = client.models.generate_content(
-                    model=m_name,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        max_output_tokens=tokens,
-                    ),
-                )
-                if response and response.text:
-                    return response.text.strip()
-            except Exception:
-                continue
-
-    # 2. Try legacy google-generativeai SDK if available
+    # 1. Try legacy google-generativeai SDK first (proven reliable with custom key)
     if HAS_LEGACY_GENAI:
         try:
             legacy_genai.configure(api_key=api_key)
@@ -69,10 +51,33 @@ def complete(system_prompt: str, user_prompt: str, max_tokens: int | None = None
                     res = model.generate_content(user_prompt)
                     if res and res.text:
                         return res.text.strip()
-                except Exception:
+                except Exception as ex:
+                    print(f"[LLM Legacy SDK] Model {m_name} failed: {ex}")
                     continue
-        except Exception:
-            pass
+        except Exception as ex:
+            print(f"[LLM Legacy Config] Failed: {ex}")
+
+    # 2. Try official google-genai SDK
+    if HAS_GENAI_SDK:
+        try:
+            client = genai.Client(api_key=api_key)
+            for m_name in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=m_name,
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            max_output_tokens=tokens,
+                        ),
+                    )
+                    if response and response.text:
+                        return response.text.strip()
+                except Exception as ex:
+                    print(f"[LLM GenAI SDK] Model {m_name} failed: {ex}")
+                    continue
+        except Exception as ex:
+            print(f"[LLM GenAI Client] Failed: {ex}")
 
     # 3. Fallback response with retrieved RAG context if LLM call fails
     context_str = ""
