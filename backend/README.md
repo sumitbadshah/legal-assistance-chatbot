@@ -8,8 +8,9 @@ matching `API_SPEC.md` and `DATABASE_SCHEMA.md`.
 
 - **Auth**: register/login with bcrypt-hashed passwords, JWT bearer tokens.
 - **Chat**: `POST /chat` retrieves relevant legal source chunks (TF-IDF search
-  over the `documents` table), sends them to Claude as grounding context, and
-  saves the full conversation per user.
+  over the `documents` table), sends them as grounding context, and
+  saves the full conversation per user. When retrieval finds no matching corpus sources,
+  it automatically falls back to Gemini to answer from general knowledge, tagging the response as unverified general knowledge.
 - **Document search**: `GET /documents/search`, `POST /documents/upload` to
   extend the legal corpus.
 - **Drafting**: `POST /draft/generate` — accepts *any* document type as free
@@ -35,7 +36,7 @@ matching `API_SPEC.md` and `DATABASE_SCHEMA.md`.
 - **Migrations**: tables are created via `Base.metadata.create_all` on
   startup, fine for getting started. Before you have real users, switch to
   Alembic migrations so schema changes don't require dropping data.
-- **LLM provider**: uses the Anthropic API directly (`app/llm/client.py`).
+- **LLM provider**: uses the Google Gemini API directly (`app/llm/client.py`).
   Your original docs assumed OpenAI GPT — swap the client if you'd rather
   use OpenAI; the rest of the app doesn't care which provider `complete()`
   calls.
@@ -44,7 +45,7 @@ matching `API_SPEC.md` and `DATABASE_SCHEMA.md`.
 
 ```bash
 cp .env.example .env
-# edit .env and set a real ANTHROPIC_API_KEY
+# edit .env and set a real GEMINI_API_KEY
 
 docker compose up --build
 ```
@@ -60,7 +61,7 @@ pip install -r requirements.txt
 
 # start a local Postgres however you like, then:
 cp .env.example .env
-# edit .env: DATABASE_URL, ANTHROPIC_API_KEY
+# edit .env: DATABASE_URL, GEMINI_API_KEY
 
 uvicorn app.main:app --reload
 ```
@@ -84,7 +85,7 @@ This is a standard containerized FastAPI + Postgres app, so any of these work:
    `Dockerfile`.
 3. Add a managed Postgres instance (both platforms offer one in a couple of
    clicks) and set `DATABASE_URL` to its connection string.
-4. Set `SECRET_KEY`, `ANTHROPIC_API_KEY`, and `ALLOWED_ORIGINS` (your
+4. Set `SECRET_KEY`, `GEMINI_API_KEY`, and `ALLOWED_ORIGINS` (your
    frontend's real URL) as environment variables.
 5. Deploy. Health check: `GET /health`.
 
@@ -92,7 +93,7 @@ This is a standard containerized FastAPI + Postgres app, so any of these work:
 ```bash
 fly launch          # detects the Dockerfile
 fly postgres create # attach a Postgres cluster
-fly secrets set SECRET_KEY=... ANTHROPIC_API_KEY=... ALLOWED_ORIGINS=...
+fly secrets set SECRET_KEY=... GEMINI_API_KEY=... ALLOWED_ORIGINS=...
 fly deploy
 ```
 
@@ -105,10 +106,10 @@ Put this behind a reverse proxy (Caddy/Nginx) for HTTPS and you're live.
 ## Connecting the frontend
 
 The React frontend built earlier (`nyaya-sahayak.jsx`) currently calls the
-Anthropic API directly from the browser. To use this backend instead:
+Gemini API directly from the browser. To use this backend instead:
 
 1. Add a `POST /auth/register` + `/auth/login` flow to get a token.
-2. Replace the direct `fetch("https://api.anthropic.com/...")` calls with
+2. Replace the direct LLM network calls with
    calls to `POST {API_BASE_URL}/chat` and `POST {API_BASE_URL}/draft/generate`,
    sending `Authorization: Bearer <token>`.
 3. Set `ALLOWED_ORIGINS` in your backend `.env` to wherever the frontend is

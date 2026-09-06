@@ -12,4 +12,5 @@ python-multipart==0.0.9
 scikit-learn==1.5.1
 numpy==1.26.4
 google-genai>=1.0.0
+google-generativeai>=0.8.0
 python-dotenv==1.0.1

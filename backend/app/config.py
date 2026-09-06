@@ -17,8 +17,7 @@ class Settings(BaseSettings):
 
     # LLM provider (Google Gemini). Set your real GEMINI_API_KEY in environment / .env
     gemini_api_key: str = ""
-    anthropic_api_key: str = ""  # Backward compatibility alias
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.6-flash"
     llm_max_tokens: int = 1200
 
     # CORS - comma separated list of allowed origins

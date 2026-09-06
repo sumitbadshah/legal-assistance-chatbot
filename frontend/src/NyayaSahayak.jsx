@@ -194,7 +194,9 @@ export default function NyayaSahayak() {
   const [expandedService, setExpandedService] = useState(null);
 
   // --- Backend connection ---
-  const [apiBaseUrl, setApiBaseUrl] = useState("http://localhost:8000");
+  const [apiBaseUrl, setApiBaseUrl] = useState(
+    import.meta.env.VITE_API_URL || "http://localhost:8000"
+  );
   const [backendChatId, setBackendChatId] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -263,7 +265,7 @@ export default function NyayaSahayak() {
       setMessages(m => [...m, {
         role: "assistant",
         content: last.content,
-        sources: (last.sources || []).map(s => ({ act: s.act_name, section: s.section, text: s.text })),
+        sources: (last.sources || []).map(s => s.fallback ? s : { act: s.act_name, section: s.section, text: s.text }),
         feedback: null,
         messageId: last.id,
       }]);
@@ -448,13 +450,19 @@ export default function NyayaSahayak() {
                       </div>
                     </div>
                     {m.role === "assistant" && m.sources && m.sources.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5 ml-0.5">
-                        {m.sources.map((s, si) => (
-                          <span key={si} style={{ borderColor: theme.accent, color: theme.accent }} className="mono-cite text-[10px] border rounded px-1.5 py-0.5">
-                            {s.act} — {s.section}
-                          </span>
-                        ))}
-                      </div>
+                      m.sources.some(s => s.fallback) ? (
+                        <div className="text-[11px] mt-1.5 ml-0.5 fade-in" style={{ color: theme.sub }}>
+                          General knowledge — not verified against the legal corpus
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5 ml-0.5">
+                          {m.sources.map((s, si) => (
+                            <span key={si} style={{ borderColor: theme.accent, color: theme.accent }} className="mono-cite text-[10px] border rounded px-1.5 py-0.5">
+                              {s.act} — {s.section}
+                            </span>
+                          ))}
+                        </div>
+                      )
                     )}
                     {m.role === "assistant" && i > 0 && (
                       <div className="flex gap-2 mt-1.5 ml-0.5">

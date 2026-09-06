@@ -18,6 +18,17 @@ SYSTEM_TEMPLATE = (
     "RETRIEVED CONTEXT:\n{context}"
 )
 
+FALLBACK_SYSTEM_TEMPLATE = (
+    "You are Nyāya Sahāyak, an AI legal information assistant. "
+    "The user's query did not match any verified documents in our specific Indian legal corpus. "
+    "Provide a helpful answer using general knowledge. "
+    "State clearly that your response is based on general knowledge and is NOT grounded in our verified legal corpus. "
+    "Do NOT cite or fabricate any specific Act, Section, or law numbers, because no verified sources were retrieved for this query. "
+    "If the query is a legal question, state plainly that this topic falls outside our verified sources and recommend consulting a licensed advocate rather than inventing a section number. "
+    "Always clarify that this information is for educational and informational purposes only and does not constitute formal legal advice. "
+    "Respond in {language}. Reply in plain text only, no Markdown syntax."
+)
+
 
 @router.post("", response_model=schemas.ChatOut)
 def send_message(
@@ -48,12 +59,16 @@ def send_message(
     db.add(models.SearchHistory(user_id=current_user.id, query=payload.message, result_count=len(chunks)))
     db.commit()
 
-    context_block = "\n\n".join(f"[{c.act_name} — {c.section}] {c.text}" for c in chunks) or "(no relevant sources found)"
-    system_prompt = SYSTEM_TEMPLATE.format(language=payload.language or "English", context=context_block)
+    if not chunks:
+        fallback_system_prompt = FALLBACK_SYSTEM_TEMPLATE.format(language=payload.language or "English")
+        answer = complete(fallback_system_prompt, payload.message)
+        sources_json = [{"fallback": True, "provider": "gemini"}]
+    else:
+        context_block = "\n\n".join(f"[{c.act_name} — {c.section}] {c.text}" for c in chunks)
+        system_prompt = SYSTEM_TEMPLATE.format(language=payload.language or "English", context=context_block)
+        answer = complete(system_prompt, payload.message)
+        sources_json = [{"act_name": c.act_name, "section": c.section, "text": c.text} for c in chunks]
 
-    answer = complete(system_prompt, payload.message)
-
-    sources_json = [{"act_name": c.act_name, "section": c.section, "text": c.text} for c in chunks]
     assistant_msg = models.Message(chat_id=chat.id, role="assistant", content=answer, sources=sources_json)
     db.add(assistant_msg)
     db.commit()

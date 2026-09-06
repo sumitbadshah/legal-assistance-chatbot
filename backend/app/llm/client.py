@@ -1,16 +1,11 @@
 from __future__ import annotations
-try:
-    from google import genai
-    from google.genai import types
-    HAS_GENAI_SDK = True
-except ImportError:
-    HAS_GENAI_SDK = False
+import os
 
 try:
-    import google.generativeai as legacy_genai
-    HAS_LEGACY_GENAI = True
+    import google.generativeai as genai
+    HAS_GENAI = True
 except ImportError:
-    HAS_LEGACY_GENAI = False
+    HAS_GENAI = False
 
 from app.config import get_settings
 
@@ -18,71 +13,37 @@ settings = get_settings()
 
 
 def get_api_key() -> str:
-    return settings.gemini_api_key or settings.anthropic_api_key or ""
+    return settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
 
 
 def complete(system_prompt: str, user_prompt: str, max_tokens: int | None = None) -> str:
+    if not HAS_GENAI:
+        raise RuntimeError("google-generativeai is not installed.")
+
     api_key = get_api_key()
+    if not api_key or api_key in (
+        "your-gemini-api-key-here",
+        "your_gemini_api_key_here",
+        "test-key-not-used-in-this-test",
+    ):
+        raise RuntimeError("GEMINI_API_KEY setting is unset.")
 
-    # If no API key set or placeholder key, use RAG context fallback safely
-    if not api_key or api_key in ("test-key-not-used-in-this-test", "your_gemini_api_key_here", "your_anthropic_api_key_here"):
-        context_str = ""
-        if "RETRIEVED CONTEXT:\n" in system_prompt:
-            context_str = system_prompt.split("RETRIEVED CONTEXT:\n")[1].strip()
-        if context_str and context_str != "(no relevant sources found)":
-            return f"Relevant Legal Information (RAG Retrieved Context):\n\n{context_str}\n\n[Note: Configure GEMINI_API_KEY in backend/.env for AI-synthesized responses.]"
-        return "I am Nyāya Sahāyak, your AI Legal Information Assistant. Please set a valid GEMINI_API_KEY in backend/.env to generate AI responses."
-
+    genai.configure(api_key=api_key)
+    
+    model_name = settings.llm_model or "gemini-2.5-flash"
     tokens = max_tokens or settings.llm_max_tokens
-    # Prioritize models known to work with the active key
-    model_candidates = ["models/gemini-flash-latest", "gemini-flash-latest", "models/gemini-2.5-flash", "gemini-2.5-flash", settings.llm_model]
-    models_to_try = list(dict.fromkeys([m for m in model_candidates if m]))
 
-    # 1. Try legacy google-generativeai SDK first (proven reliable with custom key)
-    if HAS_LEGACY_GENAI:
-        try:
-            legacy_genai.configure(api_key=api_key)
-            for m_name in models_to_try:
-                try:
-                    model = legacy_genai.GenerativeModel(
-                        model_name=m_name,
-                        system_instruction=system_prompt
-                    )
-                    res = model.generate_content(user_prompt)
-                    if res and res.text:
-                        return res.text.strip()
-                except Exception as ex:
-                    print(f"[LLM Legacy SDK] Model {m_name} failed: {ex}")
-                    continue
-        except Exception as ex:
-            print(f"[LLM Legacy Config] Failed: {ex}")
-
-    # 2. Try official google-genai SDK
-    if HAS_GENAI_SDK:
-        try:
-            client = genai.Client(api_key=api_key)
-            for m_name in models_to_try:
-                try:
-                    response = client.models.generate_content(
-                        model=m_name,
-                        contents=user_prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            max_output_tokens=tokens,
-                        ),
-                    )
-                    if response and response.text:
-                        return response.text.strip()
-                except Exception as ex:
-                    print(f"[LLM GenAI SDK] Model {m_name} failed: {ex}")
-                    continue
-        except Exception as ex:
-            print(f"[LLM GenAI Client] Failed: {ex}")
-
-    # 3. Fallback response with retrieved RAG context if LLM call fails
-    context_str = ""
-    if "RETRIEVED CONTEXT:\n" in system_prompt:
-        context_str = system_prompt.split("RETRIEVED CONTEXT:\n")[1].strip()
-    if context_str and context_str != "(no relevant sources found)":
-        return f"Relevant Legal Information (RAG Retrieved Context):\n\n{context_str}"
-    return "Unable to generate AI response. Please verify your GEMINI_API_KEY in backend/.env."
+    try:
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=system_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=tokens,
+            )
+        )
+        res = model.generate_content(user_prompt)
+        if res and res.text:
+            return res.text.strip()
+    except Exception as ex:
+        print(f"[Gemini Client] Model {model_name} failed: {ex}")
+        raise ex
