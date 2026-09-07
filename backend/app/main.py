@@ -38,7 +38,7 @@ def on_startup():
     # Creates tables if they don't exist. For schema changes after go-live,
     # switch to Alembic migrations instead of relying on create_all.
     Base.metadata.create_all(bind=engine)
-
+    print("ALLOWED ORIGINS:", settings.cors_origins)  
     db = SessionLocal()
     try:
         seed_if_empty(db)
