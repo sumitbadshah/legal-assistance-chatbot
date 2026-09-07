@@ -30,7 +30,7 @@ def complete(system_prompt: str, user_prompt: str, max_tokens: int | None = None
 
     genai.configure(api_key=api_key)
     
-    model_name = settings.llm_model or "gemini-2.5-flash"
+    model_name = settings.llm_model or "gemini-3.6-flash"
     tokens = max_tokens or settings.llm_max_tokens
 
     try:
@@ -46,4 +46,5 @@ def complete(system_prompt: str, user_prompt: str, max_tokens: int | None = None
             return res.text.strip()
     except Exception as ex:
         print(f"[Gemini Client] Model {model_name} failed: {ex}")
-        raise ex
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {ex}")
